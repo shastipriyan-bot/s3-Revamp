@@ -75,7 +75,7 @@ href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"
       <div id="conditionContainer"></div>
 
       <div class="add-button-container">
-        <fw-button color="secondary" onclick="addConditionBlock()">
+        <fw-button color="secondary" id="add_condition_btn">
           + Add New Condition
         </fw-button>
       </div>
@@ -96,13 +96,14 @@ href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"
 
       <div id="watchContainer"></div>
 
+
       <div class="add-button-container">
-        <fw-button color="secondary" onclick="addFieldWatchBlock()">
+        <fw-button color="secondary" id="add_watcher_btn">
           + Add Field Monitor
         </fw-button>
       </div>
 
-      <fw-button onclick="saveWatcherBlock()">
+      <fw-button id="validate_watchers">
         Save
       </fw-button>
     </fw-tab-panel>
@@ -141,8 +142,8 @@ var ls = {
         fs_apikey: "#fs_apikey",
         validateConditionsBtn: "#validate_conditions",
         validateWatchersBtn: "#validate_watchers",
-        addConditionBtn: "#add_condition",
-        addWatcherBtn: "#add_watcher",
+        addConditionBtn: "#add_condition_btn",
+        addWatcherBtn: "#add_watcher_btn",
         conditionContainer: "#conditionContainer",
         watchContainer: "#watchContainer",
         tabs: "#tabs"
@@ -302,18 +303,25 @@ const {
   fs_domain,
   fs_apikey,
   validateConditionsBtn,
-  // validateWatchersBtn,
-  // addConditionBtn,
-  // addWatcherBtn
+  validateWatchersBtn,
+  addConditionBtn,
+  addWatcherBtn
 } = elements;
 
 
 $(validateFsBtn).on('click',fsValidation);
 $(validateConditionsBtn).on("click", saveConditionBlock);
-// $(validateWatchersBtn).on("fwClick", watchersValidation);
+$(validateWatchersBtn).on("click", saveWatcherBlock);
 
 // // Add event listeners for add buttons
-$(addConditionBtn).on("click", addConditionBlock);
+$(addConditionBtn).on("click", ()=>{
+  addConditionBlock()
+  resetConditionValidation()
+});
+
+$(addWatcherBtn).on("click", ()=>{
+  addFieldWatchBlock()
+});
 // $(addWatcherBtn).on("fwClick", addWatcherBlock);
 
 // // Reset validation when input fields change
@@ -321,10 +329,15 @@ $(`${fs_domain}, ${fs_apikey}`).on("keydown", function (event) {
   resetFsValidation();
 });
 
+
+
 // // Reset validation when condition/watcher blocks change
-// $(document).on("change", "#conditionContainer select", function() {
+// $(document).on("fwChange", ".conditionModuleSelect", function() {
 //   resetConditionValidation();
 // });
+// $('.conditionModuleSelect').on('fwChange',function(e){
+//   console.log('checking e',e)
+// })
 
 // $(document).on("change", "#watchContainer select", function() {
 //   resetWatcherValidation();
