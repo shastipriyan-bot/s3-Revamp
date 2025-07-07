@@ -91,14 +91,14 @@ function addConditionBlock() {
           <button class="remove-btn" onclick="removeConditionBlock(this)">✕</button>
         </div>
         <div class="field-row">
-          <fw-select label="Module" id="condMod${index}">
+          <fw-select label="Module" class="conditionModuleSelect" id="condMod${index}">
             <fw-select-option value="">Select Module</fw-select-option>
             ${modules.map(m => `<fw-select-option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</fw-select-option>`).join("")}
           </fw-select>
-          <fw-select label="Field" id="condField${index}">
+          <fw-select label="Field" class="conditionModuleSelect" id="condField${index}">
             <fw-select-option value="">Select Field</fw-select-option>
           </fw-select>
-          <fw-select label="Value" id="condValue${index}">
+          <fw-select label="Value" class="conditionModuleSelect" id="condValue${index}">
             <fw-select-option value="">Select Value</fw-select-option>
           </fw-select>
         </div>
@@ -110,14 +110,20 @@ function addConditionBlock() {
 
     // Add event listeners
     $(`#condMod${index}`).on("fwChange", (e) => {
+        resetConditionValidation()
         const idx = e.target.id.replace("condMod", "");
         loadFields(`condMod${idx}`, `condField${idx}`, `condValue${idx}`, parseInt(idx));
     });
 
     $(`#condField${index}`).on("fwChange", (e) => {
+        resetConditionValidation()
         const idx = e.target.id.replace("condField", "");
         loadFieldValues(`condMod${idx}`, `condField${idx}`, `condValue${idx}`);
     });
+    $(`#condValue${index}`).on("fwChange", () => {
+        resetConditionValidation()
+    });
+
 }
 
 // Updated loadFields function with GLOBAL field filtering
@@ -482,3 +488,245 @@ function showValidationError(blockType, index, message) {
 }
 
 
+function resetConditionValidation() {
+    ls.isConditionConfigured = false;
+    $(elements.validateConditionsBtn).attr("disabled", false);
+    $(elements.validateConditionsBtn).html("Save");
+}
+function resetWatcherValidation() {
+    ls.isWatcherConfigured = false;
+    $(elements.validateWatchersBtn).attr("disabled", false);
+    $(elements.validateWatchersBtn).html("Save");
+}
+
+
+
+function addFieldWatchBlock() {
+    if (!isAuthenticated) {
+        const tabs = document.getElementById("tabs");
+        if (tabs) {
+            tabs.setAttribute("active-tab", "0");
+        }
+        return;
+    }
+
+    const container = document.getElementById("watchContainer");
+    const index = container.children.length;
+    const block = document.createElement("div");
+    block.className = "watch-block";
+    block.innerHTML = `
+          <div class="block-header">
+            <div class="block-title">Field Monitor ${index + 1}</div>
+            <button class="remove-btn" onclick="removeBlock(this)">✕</button>
+          </div>
+          <div class="field-row two-col">
+            <fw-select label="Module" id="watchMod${index}">
+              <fw-select-option value="">Select Module</fw-select-option>
+              ${modules
+            .map(
+                (m) =>
+                    `<fw-select-option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)
+                    }</fw-select-option>`
+            )
+            .join("")}
+            </fw-select>
+            <fw-select label="Fields to Monitor" id="watchFields${index}" multiple>
+            </fw-select>
+          </div>
+          <div class="validation-error-message" id="watchError${index}"></div>
+        `;
+
+    container.appendChild(block);
+    const modSelect = document.getElementById(`watchMod${index}`);
+    modSelect.addEventListener("fwChange", (e) => {
+        resetWatcherValidation()
+        const idx = e.target.id.replace("watchMod", "");
+        loadWatchFields(`watchMod${idx}`, `watchFields${idx}`);
+    });
+
+    const modValue = document.getElementById(`watchFields${index}`);
+    modValue.addEventListener('fwChange', () => {
+        resetWatcherValidation()
+
+    })
+}
+
+
+
+async function loadWatchFields(modId, fieldId) {
+    const modElem = document.getElementById(modId);
+    const fieldElem = document.getElementById(fieldId);
+    const selectedModule = modElem?.value;
+
+    if (!selectedModule) {
+        fieldElem.innerHTML = "";
+        return;
+    }
+
+    fieldElem.innerHTML =
+        '<fw-select-option value="">Loading fields...</fw-select-option>';
+
+    try {
+        let fields = fieldsMetadata[selectedModule];
+
+        if (!fields) {
+            fields = await fetchFieldsFromAPI(selectedModule, []);
+        }
+
+        if (!fields) {
+            fieldElem.innerHTML =
+                '<fw-select-option value="">Error loading fields</fw-select-option>';
+            return;
+        }
+
+        fieldElem.innerHTML = "";
+        let fieldArray = [];
+        fields.fields.forEach((field) => {
+            if (field.label && field.name) {
+                fieldArray.push({
+                    text: field.label,
+                    value: field.name,
+                });
+                fieldElem.options = fieldArray;
+            }
+        });
+    } catch (error) {
+        console.error("Error loading watch fields:", error);
+    }
+}
+
+
+function saveWatcherBlock() {
+    const errors = [];
+    const watchBlocks = document.querySelectorAll("#watchContainer .watch-block");
+
+    // Reset flag
+    ls.isWatcherConfigured = false;
+
+    if (watchBlocks.length === 0) {
+        console.log('No watcher blocks found');
+        notify("At least one field monitor is mandatory", "error");
+        return false;
+    }
+
+    for (let i = 0; i < watchBlocks.length; i++) {
+        const modSelect = document.getElementById(`watchMod${i}`);
+        const fieldSelect = document.getElementById(`watchFields${i}`);
+
+        let blockErrors = [];
+
+        if (!modSelect || !modSelect.value) {
+            blockErrors.push("Module is required");
+        }
+        if (!fieldSelect || !fieldSelect.value || fieldSelect.value.length === 0) {
+            blockErrors.push("At least one field must be selected");
+        }
+
+        if (blockErrors.length > 0) {
+            const errorMessage = `Field Monitor ${i + 1}: ${blockErrors.join(", ")}`;
+            errors.push(errorMessage);
+            showValidationError('watch', i, blockErrors.join(", "));
+            return false; // Exit on first error
+        }
+    }
+
+    // All validations passed
+    ls.isWatcherConfigured = true;
+    console.log("✅ Watcher blocks validated successfully");
+    notify('Watcher blocks validated successfully')
+    toggleBtnLoader(elements.validateWatchersBtn, false, 'Save');
+    $(elements.validateWatchersBtn).html("Saved").attr("disabled", true);
+    return true;
+}
+
+
+// Modified removeBlock function specifically for condition blocks
+function removeConditionBlock(button) {
+    resetConditionValidation();
+
+
+    const blockToRemove = button.closest(".condition-block");
+    const removedFieldSelect = blockToRemove.querySelector('[id^="condField"]');
+    const removedField = removedFieldSelect ? removedFieldSelect.value : null;
+
+    console.log(`🗑️ Removing condition block with field: ${removedField}`);
+    blockToRemove.remove();
+
+    // Reindex all remaining blocks
+    const blocks = document.querySelectorAll("#conditionContainer .condition-block");
+    blocks.forEach((block, newIndex) => {
+        // Update block title
+        block.querySelector(".block-title").textContent = `Condition ${newIndex + 1}`;
+
+        // Update select IDs
+        block.querySelector("[id^='condMod']").id = `condMod${newIndex}`;
+        block.querySelector("[id^='condField']").id = `condField${newIndex}`;
+        block.querySelector("[id^='condValue']").id = `condValue${newIndex}`;
+        block.querySelector("[id^='condError']").id = `condError${newIndex}`;
+
+        // Remove and reattach event listeners
+        block.querySelector(`[id^='condMod']`).onchange = () => {
+            loadFields(`condMod${newIndex}`, `condField${newIndex}`, `condValue${newIndex}`, newIndex);
+        };
+
+        block.querySelector(`[id^='condField']`).onchange = () => {
+            loadFieldValues(`condMod${newIndex}`, `condField${newIndex}`, `condValue${newIndex}`);
+            if (!isPopulating) refreshAllConditionFields();
+        };
+    });
+
+
+
+    setTimeout(() => {
+        if (!isPopulating) {
+            console.log(`🔄 Refreshing all conditions after removing field: ${removedField}`);
+            refreshAllConditionFields();
+        }
+    }, 100);
+}
+
+
+// Function to refresh ALL condition fields when ANY field is selected/changed
+function refreshAllConditionFields() {
+    if (isPopulating) return; // Skip refresh during population
+
+    console.log("🔄 Refreshing all condition fields due to field selection change");
+
+    const condBlocks = document.querySelectorAll(
+        "#conditionContainer .condition-block"
+    );
+
+    condBlocks.forEach((block, index) => {
+        const modSelect = document.getElementById(`condMod${index}`);
+        const fieldSelect = document.getElementById(`condField${index}`);
+
+        if (modSelect && modSelect.value && fieldSelect) {
+            const currentSelectedField = fieldSelect.value;
+            console.log(`Refreshing condition ${index + 1}, current field: ${currentSelectedField}`);
+
+            loadFields(
+                `condMod${index}`,
+                `condField${index}`,
+                `condValue${index}`,
+                index,
+                currentSelectedField
+            );
+        }
+    });
+}
+
+
+function removeBlock(button) {
+    resetWatcherValidation();
+    button.closest(".condition-block, .watch-block").remove();
+
+    const remainingWatchBlocks = document.querySelectorAll("#watchContainer .watch-block");
+
+    // Set watcher flag based on remaining watch blocks  
+    if (remainingWatchBlocks.length === 0) {
+        ls.isWatcherConfigured = false;
+        console.log("❌ No watcher blocks remaining - watcher flag set to false");
+    }
+
+
+}
