@@ -159,7 +159,7 @@ var ls = {
 
       async function fsValidation(event) {
         console.log('this is runningf')
-  event.preventDefault();
+  // event.preventDefault();
   toggleBtnLoader(elements.validateFsBtn, true);
 
   const { fs_domain, fs_apikey } = getInputValues();
@@ -279,20 +279,228 @@ function handleApiErrors(status, message = "") {
 }
 
 
+async function getConfigs(savedConfigs) {
+  try {
 
-function getConfigs(configs) {
-  //write your code here
-};
+
+
+    if (!savedConfigs) {
+      console.log("No saved configs found");
+      return;
+    }
+    console.log("Loading saved configs:", savedConfigs);
+    isPopulating = true;
+    
+    // Set authentication data
+    if (savedConfigs.url) {
+      const domainInput = document.getElementById("fs_domain");
+      if (domainInput) {
+        domainInput.value = savedConfigs.url;
+        freshsalesDomain = savedConfigs.url;
+      }
+    }
+    if (savedConfigs.api_key) {
+      const apiKeyInput = document.getElementById("fs_apikey");
+      if (apiKeyInput) {
+        apiKeyInput.value = savedConfigs.api_key;
+        apiKey = savedConfigs.api_key;
+      }
+    }
+    
+
+    // Authenticate and wait for completion
+    await fsValidation();
+    
+    // Manually switch to next tab since validateAuth won't do it during population
+    if (isAuthenticated) {
+      switchTab(1);
+      console.log("✅ Switched to conditional triggers tab during config restoration");
+    }
+   
+    // Wait for modules to be fully loaded
+    await waitForModulesLoaded();
+   
+    // Pre-load all required field metadata
+    await preloadFieldMetadata(savedConfigs);
+    
+    // Restore conditional triggers
+    if (savedConfigs.conditions && Array.isArray(savedConfigs.conditions)) {
+      for (let i = 0; i < savedConfigs.conditions.length; i++) {
+        const condition = savedConfigs.conditions[i];
+        console.log(`Restoring condition ${i + 1}:`, condition);
+       
+        // Add block and populate immediately
+        await addAndPopulateConditionBlock(i, condition);
+      }
+      
+      // Set condition flag to true since data is restored
+      ls.isConditionConfigured = true;
+      
+      // Switch to field monitoring tab after conditions are restored
+      switchTab(2);
+      console.log("✅ Switched to field monitoring tab after restoring conditions");
+    }
+    
+    // Restore field watchers
+    if (savedConfigs.watches && Array.isArray(savedConfigs.watches)) {
+      for (let i = 0; i < savedConfigs.watches.length; i++) {
+        const watch = savedConfigs.watches[i];
+        console.log(`Restoring watch ${i + 1}:`, watch);
+       
+        // Add block and populate immediately
+        await addAndPopulateWatchBlock(i, watch);
+      }
+      
+      // Set watcher flag to true since data is restored
+      ls.isWatcherConfigured = true;
+    }
+    
+    isPopulating = false;
+    console.log("✅ Configuration restoration completed successfully");
+
+requestAnimationFrame(() => {
+  enableConditionValidation();
+  enableWatcherValidation();
+});
+
+notify('Configurations Loaded Successfully')
+
+   
+  } catch (err) {
+    console.error("❌ Error in getConfigs:", err);
+    isPopulating = false;
+    throw err;
+  }
+}
+
+
+
+
+function enableConditionValidation() {
+    ls.isConditionConfigured = true;
+    $(elements.validateConditionsBtn).attr("disabled", true);
+    $(elements.validateConditionsBtn).html("Saved");
+    console.log('yessssssssssssssssssss')
+
+}
+function enableWatcherValidation() {
+    ls.isWatcherConfigured = true;
+    $(elements.validateWatchersBtn).attr("disabled", true);
+    $(elements.validateWatchersBtn).html("Saved");
+    console.log('yessssssssssssssssssss')
+}
+
 
 function validate() {
   let isValid = true;
+
+  if(ls.isFsValid === false && ls.isConditionConfigured && ls.isWatcherConfigured){
+    notify(
+            "Please validate Freshsales CRM , Configure Condition and Field Monitering again to Install/Save",
+            "error"
+          );
+  }else if(ls.isFsValid === false){
+    notify(
+            "Please validate Freshsales CRM again to Install/Save",
+            "error"
+          );
+  }else if(ls.isConditionConfigured === false){
+    notify(
+            "Please Configure the Conditions again to Install/Save",
+            "error"
+          );
+  }else if(ls.isWatcherConfigured === false){
+    notify(
+            "Please Configure the Field Monitering again to Install/Save",
+            "error"
+          );
+  }
+
+  return ls.isFsValid && ls.isConditionConfigured && ls.isWatcherConfigured; 
+
   //write your code here
-  return isValid;
+  // return isValid;
 };
 
+// function postConfigs() {
+//   //write your code here
+// };
+
 function postConfigs() {
-  //write your code here
-};
+  authInfo = getInputValues();
+
+        try {
+          if (!isAuthenticated) {
+            const tabs = document.getElementById("tabs");
+            if (tabs) {
+              tabs.setAttribute("active-tab", "0");
+            }
+            return null;
+          }
+
+          //   Get authentication data
+          const domain = authInfo.fs_domain;
+          const api_key = authInfo.fs_apikey;
+
+          // Collect conditional triggers
+          const condBlocks = document.querySelectorAll(
+            "#conditionContainer .condition-block"
+          );
+          const conditions = Array.from(condBlocks)
+            .map((block, i) => {
+              const modSelect = block.querySelector(`#condMod${i}`);
+              const fieldSelect = block.querySelector(`#condField${i}`);
+              const valueSelect = block.querySelector(`#condValue${i}`);
+
+              if (!modSelect || !fieldSelect || !valueSelect) return null;
+
+              return {
+                module: modSelect.value || "",
+                field: fieldSelect.value || "",
+                value: valueSelect.value || "",
+                fieldLabel: fieldSelect.selectedOptions[0]?.textContent || "",
+                valueLabel: valueSelect.selectedOptions[0]?.textContent || "",
+              };
+            })
+            .filter((c) => c && c.module && c.field && c.value);
+
+          //   // Collect field watchers
+          const watchBlocks = document.querySelectorAll(
+            "#watchContainer .watch-block"
+          );
+          const watches = Array.from(watchBlocks)
+            .map((block, i) => {
+              const modSelect = block.querySelector(`#watchMod${i}`);
+              const fieldSelect = block.querySelector(`#watchFields${i}`);
+
+              if (!modSelect || !fieldSelect) return null;
+
+              return {
+                module: modSelect.value,
+                fields: fieldSelect.value,
+              };
+            })
+            .filter((w) => w && w.module && w.fields.length > 0);
+
+          console.log("Saving configuration:", {
+            url: domain,
+            api_key: api_key,
+            conditions: conditions,
+            watches: watches,
+          });
+          
+          return {
+            url: domain,
+            api_key: api_key,
+            conditions: conditions,
+            watches: watches,
+          };
+        } catch (err) {
+          console.error("Error in postConfigs:", err);
+          return null;
+        }
+      }
+
 
 
 function init() {
@@ -315,12 +523,16 @@ $(validateWatchersBtn).on("click", saveWatcherBlock);
 
 // // Add event listeners for add buttons
 $(addConditionBtn).on("click", ()=>{
+  clearValidationErrors()
   addConditionBlock()
   resetConditionValidation()
 });
 
 $(addWatcherBtn).on("click", ()=>{
+  clearValidationErrors()
   addFieldWatchBlock()
+  resetWatcherValidation()
+
 });
 // $(addWatcherBtn).on("fwClick", addWatcherBlock);
 
@@ -329,6 +541,9 @@ $(`${fs_domain}, ${fs_apikey}`).on("keydown", function (event) {
   resetFsValidation();
 });
 
+$('.prepopulatedCondition').on('fWchange',function(){
+  resetConditionValidation();
+})
 
 
 // // Reset validation when condition/watcher blocks change
