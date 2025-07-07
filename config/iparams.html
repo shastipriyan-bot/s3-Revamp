@@ -1,0 +1,348 @@
+<html>
+<head>
+  <title>avanse</title>
+
+  <script
+  type="module"
+  src="https://cdn.jsdelivr.net/npm/@freshworks/crayons@v4/dist/crayons/crayons.esm.js"
+></script>
+<script
+  nomodule
+  src="https://cdn.jsdelivr.net/npm/@freshworks/crayons@v4/dist/crayons/crayons.js"
+></script>
+
+<link
+rel="stylesheet"
+type="text/css"
+href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"
+/>
+  
+  <link rel="stylesheet" type="text/css" href="./assets/iparams.css">
+
+</head>
+<body>
+  <fw-tabs id="tabs">
+    <fw-tab slot="tab" panel="auth-panel">Authentication</fw-tab>
+    <fw-tab slot="tab" panel="conditional-panel" disabled>Conditional Triggers</fw-tab>
+    <fw-tab slot="tab" panel="fieldwatch-panel" disabled >Field Monitoring</fw-tab>
+
+    <fw-tab-panel name="auth-panel">
+      <div class="auth-section">
+        <div class="section-header">
+          <h2 class="section-title">Connect to Freshsales</h2>
+          <p class="section-description">
+            Enter your Freshsales domain and API key to establish connection
+          </p>
+        </div>
+
+        <div class="auth-status" id="authStatus"></div>
+
+        <div class="auth-form">
+          <div class="form-group">
+            <fw-input
+              label="Freshsales Domain"
+              id="fs_domain"
+              placeholder="your-domain.myfreshworks.com"
+              value="konnectify-860777019147049648.myfreshworks.com"
+            ></fw-input>
+          </div>
+          <div class="form-group">
+            <fw-input
+              label="API Key"
+              id="fs_apikey"
+              type="password"
+              placeholder="Enter your API key"
+              value="YREwQ3QgTtjikqL9O7nUdg"
+            ></fw-input>
+          </div>
+          <fw-button id="validate_fs" color="primary"
+            >Validate Connection</fw-button
+          >
+          <div id="authStatusIndicator"></div>
+        </div>
+      </div>
+    </fw-tab-panel>
+
+    <fw-tab-panel name="conditional-panel">
+      <div class="section-header">
+        <h2 class="section-title">Conditional Triggers</h2>
+        <p class="section-description">
+          Set up conditions that will trigger actions when specific field
+          values are met
+        </p>
+      </div>
+
+      <div id="conditionContainer"></div>
+
+      <div class="add-button-container">
+        <fw-button color="secondary" onclick="addConditionBlock()">
+          + Add New Condition
+        </fw-button>
+      </div>
+
+      <fw-button id="validate_conditions" >
+        Save
+      </fw-button>
+    </fw-tab-panel>
+
+    <fw-tab-panel name="fieldwatch-panel">
+      <div class="section-header">
+        <h2 class="section-title">Field Monitoring</h2>
+        <p class="section-description">
+          Monitor specific fields for changes and trigger actions when they
+          are updated
+        </p>
+      </div>
+
+      <div id="watchContainer"></div>
+
+      <div class="add-button-container">
+        <fw-button color="secondary" onclick="addFieldWatchBlock()">
+          + Add Field Monitor
+        </fw-button>
+      </div>
+
+      <fw-button onclick="saveWatcherBlock()">
+        Save
+      </fw-button>
+    </fw-tab-panel>
+  </fw-tabs>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.0/jquery.min.js"></script>
+<script src="{{{appclient}}}"></script>
+<script src="./assets/iparams.js"></script>
+
+<script
+type="text/javascript"
+src="https://cdn.jsdelivr.net/npm/toastify-js"
+></script>
+
+<script type= "text/javascript">
+
+var ls = {
+        isFsValid: false,
+        isConditionConfigured: false,
+        isWatcherConfigured: false,
+        token: ""
+      };
+
+
+      let modules = [];
+      let tables = [];
+      let moduleMap = {};
+      let isPopulating = false;
+      let fieldsMetadata = {};
+      let fieldObject = {};
+      let selected_field = [];
+
+
+      var elements = {
+        validateFsBtn: "#validate_fs",
+        fs_domain: "#fs_domain",
+        fs_apikey: "#fs_apikey",
+        validateConditionsBtn: "#validate_conditions",
+        validateWatchersBtn: "#validate_watchers",
+        addConditionBtn: "#add_condition",
+        addWatcherBtn: "#add_watcher",
+        conditionContainer: "#conditionContainer",
+        watchContainer: "#watchContainer",
+        tabs: "#tabs"
+      };
+
+
+      function getInputValues() {
+        return {
+          fs_domain: $(elements.fs_domain).val().trim(),
+          fs_apikey: $(elements.fs_apikey).val().trim(),
+        };
+      }
+
+      async function fsValidation(event) {
+        console.log('this is runningf')
+  event.preventDefault();
+  toggleBtnLoader(elements.validateFsBtn, true);
+
+  const { fs_domain, fs_apikey } = getInputValues();
+  freshsalesDomain = fs_domain;
+  apiKey = fs_apikey;
+
+  console.log("🔍 Validating Freshsales credentials:", {
+    domain: freshsalesDomain,
+    apiKey: apiKey ? "***" : "empty"
+  });
+
+  // Input validation
+  const missingDomain = !freshsalesDomain;
+  const missingApiKey = !apiKey;
+
+  if (missingDomain || missingApiKey) {
+    const errorMsg = missingDomain && missingApiKey
+      ? "Domain and API key are required"
+      : missingDomain
+      ? "Freshsales domain is required"
+      : "API key is required";
+
+    ls.isFsValid = false;
+    toggleBtnLoader(elements.validateFsBtn, false);
+    notify(errorMsg, "error");
+    return false;
+  }
+
+  // Domain format validation
+  const isDomainValid =
+    freshsalesDomain.includes(".") &&
+    (freshsalesDomain.includes("myfreshworks.com") || freshsalesDomain.includes("freshsales.io"));
+
+  if (!isDomainValid) {
+    ls.isFsValid = false;
+    toggleBtnLoader(elements.validateFsBtn, false);
+    notify("Please enter a valid Freshsales domain (e.g., your-domain.myfreshworks.com)", "error");
+    return false;
+  }
+
+  try {
+    const context = {
+      domain_url: freshsalesDomain,
+      api_key: apiKey
+    };
+
+    const [verifyResult, modulesResult] = await Promise.allSettled([
+      client.request.invokeTemplate("verify_domain_api", { context }),
+      fetchModules(freshsalesDomain, apiKey)
+    ]);
+
+    if (verifyResult.status === "rejected") throw verifyResult.reason;
+    if (modulesResult.status === "rejected") throw modulesResult.reason;
+
+    const response = verifyResult.value;
+    const moduleResponse = modulesResult.value;
+
+    // API response validation
+    if (response.status !== 200) {
+      handleApiErrors(response.status);
+      ls.isFsValid = false;
+      toggleBtnLoader(elements.validateFsBtn, false);
+      return false;
+    }
+
+    const parsedModules = JSON.parse(moduleResponse?.response || "{}")?.module_customizations;
+
+    if (!Array.isArray(parsedModules) || parsedModules.length === 0) {
+      notify("No modules found - this usually means invalid credentials or insufficient API permissions", "error");
+      ls.isFsValid = false;
+      toggleBtnLoader(elements.validateFsBtn, false);
+      return false;
+    }
+
+    // Extract modules
+    modules = [];
+    tables = [];
+    moduleMap = {};
+
+    parsedModules.forEach(({ singular_name, table_name, entity_name, custom }) => {
+      const key = singular_name;
+      const value = custom === false ? table_name : entity_name;
+      modules.push(key);
+      tables.push(value);
+      moduleMap[key] = value;
+    });
+
+    // Success state
+    isAuthenticated = true;
+    ls.isFsValid = true;
+    toggleBtnLoader(elements.validateFsBtn, false);
+    $(elements.validateFsBtn).html("Validated").attr("disabled", true);
+    notify("Freshsales validation successful!");
+    console.log("✅ Authentication successful, modules loaded:", modules);
+
+    if (!isPopulating) switchTab(1);
+    return true;
+
+  } catch (error) {
+    console.error("❌ Error during validation:", error);
+    ls.isFsValid = false;
+    toggleBtnLoader(elements.validateFsBtn, false);
+    handleApiErrors(error.status, error.message);
+    return false;
+  }
+}
+
+function handleApiErrors(status, message = "") {
+  const statusMessages = {
+    400: "Please enter a valid domain",
+    404: "Please enter a valid domain",
+    401: "Please enter a valid API Key",
+    502: "Network error - please check your connection and try again"
+  };
+
+  notify(statusMessages[status] || `Validation failed: ${message || "Unknown error occurred"}`, "error");
+}
+
+
+
+function getConfigs(configs) {
+  //write your code here
+};
+
+function validate() {
+  let isValid = true;
+  //write your code here
+  return isValid;
+};
+
+function postConfigs() {
+  //write your code here
+};
+
+
+function init() {
+
+console.log('all emak',elements)
+const {
+  validateFsBtn,
+  fs_domain,
+  fs_apikey,
+  validateConditionsBtn,
+  // validateWatchersBtn,
+  // addConditionBtn,
+  // addWatcherBtn
+} = elements;
+
+
+$(validateFsBtn).on('click',fsValidation);
+$(validateConditionsBtn).on("click", saveConditionBlock);
+// $(validateWatchersBtn).on("fwClick", watchersValidation);
+
+// // Add event listeners for add buttons
+$(addConditionBtn).on("click", addConditionBlock);
+// $(addWatcherBtn).on("fwClick", addWatcherBlock);
+
+// // Reset validation when input fields change
+$(`${fs_domain}, ${fs_apikey}`).on("keydown", function (event) {
+  resetFsValidation();
+});
+
+// // Reset validation when condition/watcher blocks change
+// $(document).on("change", "#conditionContainer select", function() {
+//   resetConditionValidation();
+// });
+
+// $(document).on("change", "#watchContainer select", function() {
+//   resetWatcherValidation();
+// });
+}
+
+
+
+
+$(document).ready(function () {
+        app.initialized().then(function (client) {
+          window.client = client;
+          console.log("Client initialized:", client);
+          init();
+        });
+      });
+
+
+</script>
+</body>
+</html>

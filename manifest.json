@@ -1,0 +1,40 @@
+{
+  "platform-version": "2.3",
+  "product": {
+    "freshworks_crm": {
+      "events": {
+        "onContactCreate": {
+          "handler": "onContactCreateHandler"
+        },
+        "onContactUpdate": {
+          "handler": "onContactUpdateHandler"
+        },
+        "onDealCreate": {
+          "handler": "onDealCreateHandler"
+        },
+        "onDealUpdate": {
+          "handler": "onDealUpdateHandler"
+        },
+        "onCustomModuleCreate": {
+          "handler": "onCustomModuleCreateHandler"
+        },
+        "onCustomModuleUpdate": {
+          "handler": "onCustomModuleUpdateHandler"
+        }
+      },
+      "requests": {
+        "verify_domain_api": {},
+        "GetFreshsalesFields": {},
+        "fetch_module": {},
+        "GetFreshsalesCustomFields": {}
+      }
+    }
+  },
+  "engines": {
+    "node": "18.20.4",
+    "fdk": "9.5.1"
+  },
+  "dependencies": {
+    "axios": "0.27.2"
+  }
+}

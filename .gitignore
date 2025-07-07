@@ -1,0 +1,13 @@
+.fdk/
+.report.json
+log
+node_modules/
+coverage/
+.meta.json
+.freddy-copilot-error.log
+app.info
+dist/
+package.json
+settings.json
+Avansse-Freshsales-S3-Trigger-Custom-App/
+.idea/

@@ -1,0 +1,64 @@
+{
+    "verify_domain_api": {
+        "schema": {
+            "method": "GET",
+            "protocol": "https",
+            "host": "<%= context.domain_url %>",
+            "path": "/crm/sales/api/contacts/filters",
+            "headers": {
+                "Authorization": "Token token=<%= context.api_key %>",
+                "Content-Type": "application/json"
+            }
+        }
+    },
+    "fetch_module": {
+        "schema": {
+            "protocol": "https",
+            "method": "GET",
+            "host": "avansefinancialservices-sandbox.myfreshworks.com",
+            "path": "/crm/sales/settings/module_customizations",
+            "headers": {
+                "Authorization": "Token token=HLNWqn4r8hVj0UrrEcW6Zg",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        },
+        "options": {
+            "maxAttempts": 3,
+            "retryDelay": 1000
+        }
+    },
+    "GetFreshsalesFields": {
+        "schema": {
+            "protocol": "https",
+            "method": "GET",
+            "host": "<%= context.host %>",
+            "path": "/crm/sales/api/settings/<%= context.module %>/fields",
+            "headers": {
+                "Authorization": "Token token=<%= context.api %>",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        },
+        "options": {
+            "maxAttempts": 3,
+            "retryDelay": 1000
+        }
+    },
+    "GetFreshsalesCustomFields": {
+        "schema": {
+            "protocol": "https",
+            "method": "GET",
+            "host": "<%= context.host %>",
+            "path": "/crm/sales/api/settings/<%= context.module %>/forms",
+            "headers": {
+                "Authorization": "Token token=<%= context.api %>",
+                "Content-Type": "application/json"
+            }
+        },
+        "options": {
+            "maxAttempts": 3,
+            "retryDelay": 1000
+        }
+    }
+}
