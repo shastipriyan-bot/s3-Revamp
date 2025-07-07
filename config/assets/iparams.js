@@ -504,28 +504,35 @@ function resetWatcherValidation() {
 
 
 // Function to clear validation errors
-function clearValidationErrors() {
+function clearValidationErrors(flag) {
     // Clear condition block errors
-    const condBlocks = document.querySelectorAll("#conditionContainer .condition-block");
-    condBlocks.forEach((block, index) => {
-        block.classList.remove("validation-error");
-        const errorMsg = document.getElementById(`condError${index}`);
-        if (errorMsg) {
-            errorMsg.classList.remove("show");
-            errorMsg.textContent = "";
-        }
-    });
 
-    // Clear watch block errors
-    const watchBlocks = document.querySelectorAll("#watchContainer .watch-block");
-    watchBlocks.forEach((block, index) => {
-        block.classList.remove("validation-error");
-        const errorMsg = document.getElementById(`watchError${index}`);
-        if (errorMsg) {
-            errorMsg.classList.remove("show");
-            errorMsg.textContent = "";
-        }
-    });
+    if (flag === 'condition') {
+
+        const condBlocks = document.querySelectorAll("#conditionContainer .condition-block");
+        condBlocks.forEach((block, index) => {
+            block.classList.remove("validation-error");
+            const errorMsg = document.getElementById(`condError${index}`);
+            if (errorMsg) {
+                errorMsg.classList.remove("show");
+                errorMsg.textContent = "";
+            }
+        });
+    } else {
+
+
+
+        // Clear watch block errors
+        const watchBlocks = document.querySelectorAll("#watchContainer .watch-block");
+        watchBlocks.forEach((block, index) => {
+            block.classList.remove("validation-error");
+            const errorMsg = document.getElementById(`watchError${index}`);
+            if (errorMsg) {
+                errorMsg.classList.remove("show");
+                errorMsg.textContent = "";
+            }
+        });
+    }
 }
 
 
@@ -671,6 +678,8 @@ function saveWatcherBlock() {
 
 // Modified removeBlock function specifically for condition blocks
 function removeConditionBlock(button) {
+
+    console.log('checking population', isPopulating)
     resetConditionValidation();
 
 
@@ -691,7 +700,7 @@ function removeConditionBlock(button) {
         block.querySelector("[id^='condMod']").id = `condMod${newIndex}`;
         block.querySelector("[id^='condField']").id = `condField${newIndex}`;
         block.querySelector("[id^='condValue']").id = `condValue${newIndex}`;
-        block.querySelector("[id^='condError']").id = `condError${newIndex}`;
+        // block.querySelector("[id^='condError']").id = `condError${newIndex}`;
 
         // Remove and reattach event listeners
         block.querySelector(`[id^='condMod']`).onchange = () => {
@@ -745,20 +754,66 @@ function refreshAllConditionFields() {
 }
 
 
+// function removeBlock(button) {
+//     resetWatcherValidation();
+//     button.closest(".watchContainer, .watch-block").remove();
+
+//     const remainingWatchBlocks = document.querySelectorAll("#watchContainer .watch-block");
+
+//     // Set watcher flag based on remaining watch blocks
+//     if (remainingWatchBlocks.length === 0) {
+//         ls.isWatcherConfigured = false;
+//         console.log("❌ No watcher blocks remaining - watcher flag set to false");
+//     }
+
+
+// }
+
 function removeBlock(button) {
     resetWatcherValidation();
-    button.closest(".condition-block, .watch-block").remove();
 
-    const remainingWatchBlocks = document.querySelectorAll("#watchContainer .watch-block");
+    const block = button.closest(".watch-block");
+    if (!block) return;
 
-    // Set watcher flag based on remaining watch blocks  
-    if (remainingWatchBlocks.length === 0) {
-        ls.isWatcherConfigured = false;
-        console.log("❌ No watcher blocks remaining - watcher flag set to false");
-    }
+    block.remove();
 
+    const watchBlocks = document.querySelectorAll("#watchContainer .watch-block");
 
+    // Set watcher flag
+    ls.isWatcherConfigured = watchBlocks.length > 0;
+
+    // Re-index remaining blocks
+    watchBlocks.forEach((block, index) => {
+        // Update block title
+        const title = block.querySelector(".block-title");
+        if (title) {
+            title.textContent = `Field Monitor ${index + 1}`;
+        }
+
+        // Update fw-select IDs and hidden input names/values
+        const moduleSelect = block.querySelector(`fw-select[label="Module"]`);
+        const fieldSelect = block.querySelector(`fw-select[label="Fields to Monitor"]`);
+
+        if (moduleSelect) {
+            moduleSelect.id = `watchMod${index}`;
+            const moduleInput = moduleSelect.querySelector("input.hidden-input");
+            if (moduleInput) {
+                moduleInput.name = `watchMod${index}`;
+            }
+        }
+
+        if (fieldSelect) {
+            fieldSelect.id = `watchFields${index}`;
+            const fieldInput = fieldSelect.querySelector("input.hidden-input");
+            if (fieldInput) {
+                fieldInput.name = `watchFields${index}`;
+            }
+        }
+    });
+
+    console.log("✅ Watch blocks reindexed after removal");
 }
+
 
 
 // Combined function to add and populate condition block
