@@ -251,6 +251,8 @@ async function fetchFieldsFromAPI(module, excludeFields = []) {
         let response;
 
         // === ✅ Handle CUSTOM MODULE (e.g., cm_offline_sampark)
+
+
         if (moduleMap[module].startsWith("cm_")) {
             response = await client.request.invokeTemplate(
                 "GetFreshsalesCustomFields",
@@ -501,6 +503,33 @@ function resetWatcherValidation() {
 
 
 
+// Function to clear validation errors
+function clearValidationErrors() {
+    // Clear condition block errors
+    const condBlocks = document.querySelectorAll("#conditionContainer .condition-block");
+    condBlocks.forEach((block, index) => {
+        block.classList.remove("validation-error");
+        const errorMsg = document.getElementById(`condError${index}`);
+        if (errorMsg) {
+            errorMsg.classList.remove("show");
+            errorMsg.textContent = "";
+        }
+    });
+
+    // Clear watch block errors
+    const watchBlocks = document.querySelectorAll("#watchContainer .watch-block");
+    watchBlocks.forEach((block, index) => {
+        block.classList.remove("validation-error");
+        const errorMsg = document.getElementById(`watchError${index}`);
+        if (errorMsg) {
+            errorMsg.classList.remove("show");
+            errorMsg.textContent = "";
+        }
+    });
+}
+
+
+
 function addFieldWatchBlock() {
     if (!isAuthenticated) {
         const tabs = document.getElementById("tabs");
@@ -729,4 +758,556 @@ function removeBlock(button) {
     }
 
 
+}
+
+
+// Combined function to add and populate condition block
+async function addAndPopulateConditionBlock(index, condition) {
+    try {
+
+        console.log(`Starting population of condition ${index + 1}:`, condition);
+
+        // Add the condition block
+        const container = document.getElementById("conditionContainer");
+        const block = document.createElement("div");
+        block.className = "condition-block";
+        block.innerHTML = `
+            <div class="block-header" style="display:flex; align-items:center; gap: 8px;">
+              <div class="block-title" style="font-weight:600; font-size:16px;">Condition ${index + 1}</div>
+              <button class="remove-btn" onclick="removeConditionBlock(this)" aria-label="Remove Condition">✕</button>
+            </div>
+            <div class="field-row">
+              <fw-select label="Module" id="condMod${index}">
+                <fw-select-option value="">Select Module</fw-select-option>
+                ${modules.map(m => `<fw-select-option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</fw-select-option>`).join("")}
+              </fw-select>
+              <fw-select label="Field" id="condField${index}">
+                <fw-select-option value="">Select Field</fw-select-option>
+              </fw-select>
+              <fw-select label="Value" id="condValue${index}">
+                <fw-select-option value="">Select Value</fw-select-option>
+              </fw-select>
+            </div>
+          `;
+
+        container.appendChild(block);
+
+        // Wait for DOM elements to be ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Get the elements
+        const modSelect = document.getElementById(`condMod${index}`);
+        const fieldSelect = document.getElementById(`condField${index}`);
+        const valueSelect = document.getElementById(`condValue${index}`);
+
+        if (!modSelect || !fieldSelect || !valueSelect) {
+            throw new Error(`Failed to find condition elements for index ${index}`);
+        }
+
+        // Validate condition data
+        if (!condition.module || !condition.field || !condition.value) {
+            throw new Error(`Invalid condition data for index ${index}: ${JSON.stringify(condition)}`);
+        }
+
+        // Set module value
+        console.log(`Setting module for condition ${index}: ${condition.module}`);
+        modSelect.value = condition.module;
+
+        // Check if we have field metadata for this module
+        let moduleFields = fieldsMetadata[condition.module];
+
+        if (!moduleFields || !moduleFields.fields) {
+            console.log(`Field metadata not found for ${condition.module}, fetching...`);
+            try {
+                const fetchedFields = await fetchFieldsFromAPI(condition.module, []);
+                if (fetchedFields && fetchedFields.fields) {
+                    moduleFields = fetchedFields;
+                    console.log(`✅ Fetched fields for ${condition.module}:`, moduleFields.fields.length);
+                } else {
+                    throw new Error(`Failed to fetch fields for module: ${condition.module}`);
+                }
+            } catch (fetchError) {
+                console.error(`Failed to fetch fields for ${condition.module}:`, fetchError);
+                throw new Error(`Cannot load fields for module: ${condition.module}`);
+            }
+        }
+
+        // Ensure fields array exists
+        if (!moduleFields.fields || !Array.isArray(moduleFields.fields)) {
+            throw new Error(`Invalid field data structure for module: ${condition.module}`);
+        }
+
+        // Build field options
+        console.log(`Building field options for condition ${index}`);
+        const fieldOptions = [];
+
+        // Get all currently selected fields to exclude them
+        const allSelectedFields = getAllSelectedFields();
+
+        moduleFields.fields.forEach((field) => {
+            if (field && field.label && field.name &&
+                field.type !== "text" && field.type !== "number" && field.type !== "textarea") {
+
+                // Check if this field is already selected in another condition
+                if (!allSelectedFields.includes(field.name)) {
+                    fieldOptions.push({ text: field.label, value: field.name });
+                } else {
+                    console.log(`Excluding field "${field.label}" from condition ${index + 1} - already selected elsewhere`);
+                }
+            }
+        });
+
+        if (fieldOptions.length === 0) {
+            console.warn(`No available field options found for module: ${condition.module} in condition ${index + 1}`);
+            fieldOptions.push({ text: "No available fields", value: "" });
+        }
+
+        fieldSelect.options = fieldOptions;
+
+        // Set field value
+        console.log(`Setting field for condition ${index}: ${condition.field}`);
+        fieldSelect.value = condition.field;
+
+        // Load and populate values
+        console.log(`Loading values for condition ${index}`);
+        const fieldMetadata = await findFieldMetadata(condition.module, condition.field);
+
+        if (fieldMetadata && Array.isArray(fieldMetadata.choices)) {
+            let valueArray = [];
+
+            if (["radio_button", "checkbox"].includes(fieldMetadata.type)) {
+                valueArray = [
+                    { text: "Yes", value: "true" },
+                    { text: "No", value: "false" }
+                ];
+            } else if (fieldMetadata.type === "date") {
+                valueArray = [{ text: "Not Empty", value: "not_empty" }];
+            } else {
+                valueArray = fieldMetadata.choices.map((choice) => ({
+                    text: choice.value || choice.text || choice,
+                    value: choice.value || choice.text || choice
+                }));
+            }
+
+            valueSelect.options = valueArray;
+            console.log(`✅ Loaded ${valueArray.length} value options for condition ${index}`);
+        } else {
+            console.warn(`No choices found for field ${condition.field} in module ${condition.module}`);
+            valueSelect.options = [{ text: "No options available", value: "" }];
+        }
+
+        // Set value
+        console.log(`Setting value for condition ${index}: ${condition.value}`);
+        valueSelect.value = condition.value;
+
+
+
+        // Add event listeners for future changes (and clear validation errors on change)
+        modSelect.addEventListener("fwChange", (e) => {
+            resetConditionValidation();
+            const idx = e.target.id.replace("condMod", "");
+            // Clear validation error when user makes changes
+            const block = e.target.closest('.condition-block');
+            if (block) {
+                block.classList.remove("validation-error");
+                const errorMsg = document.getElementById(`condError${idx}`);
+                if (errorMsg) {
+                    errorMsg.classList.remove("show");
+                }
+            }
+
+            if (!isPopulating) {
+                loadFields(`condMod${idx}`, `condField${idx}`, `condValue${idx}`, parseInt(idx));
+            }
+        });
+
+        fieldSelect.addEventListener("fwChange", (e) => {
+            resetConditionValidation();
+            const idx = e.target.id.replace("condField", "");
+            // Clear validation error when user makes changes
+            const block = e.target.closest('.condition-block');
+            if (block) {
+                block.classList.remove("validation-error");
+                const errorMsg = document.getElementById(`condError${idx}`);
+                if (errorMsg) {
+                    errorMsg.classList.remove("show");
+                }
+            }
+
+            if (!isPopulating) {
+                loadFieldValues(`condMod${idx}`, `condField${idx}`, `condValue${idx}`);
+                refreshAllConditionFields();
+            }
+        });
+
+        // Add value change listener to clear validation errors
+        valueSelect.addEventListener("fwChange", (e) => {
+            resetConditionValidation();
+            const idx = e.target.id.replace("condValue", "");
+            const block = e.target.closest('.condition-block');
+            if (block) {
+                block.classList.remove("validation-error");
+                const errorMsg = document.getElementById(`condError${idx}`);
+                if (errorMsg) {
+                    errorMsg.classList.remove("show");
+                }
+            }
+        });
+
+        console.log(`✅ Condition ${index + 1} populated successfully`);
+
+        $(elements.validateConditionsBtn).html("Saved").attr("disabled", true);
+
+        ls.isConditionConfigured = true;
+    } catch (error) {
+        console.error(`❌ Error populating condition ${index + 1}:`, error);
+        console.error(`Condition data:`, condition);
+        console.error(`Available modules:`, modules);
+        console.error(`Field metadata:`, fieldsMetadata);
+
+        // Still add the block even if population fails
+        const container = document.getElementById("conditionContainer");
+        if (container.children.length <= index) {
+            const block = document.createElement("div");
+            block.className = "condition-block";
+            block.innerHTML = `
+              <div class="block-header" style="display:flex; align-items:center; gap: 8px;">
+                <div class="block-title" style="font-weight:600; font-size:16px; color: #ef4444;">Condition ${index + 1} (Error)</div>
+                <button class="remove-btn" onclick="removeConditionBlock(this)" aria-label="Remove Condition">✕</button>
+              </div>
+              <div class="field-row">
+                <fw-select label="Module" id="condMod${index}">
+                  <fw-select-option value="">Select Module</fw-select-option>
+                  ${modules.map(m => `<fw-select-option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</fw-select-option>`).join("")}
+                </fw-select>
+                <fw-select label="Field" id="condField${index}">
+                  <fw-select-option value="">Select Field</fw-select-option>
+                </fw-select>
+                <fw-select label="Value" id="condValue${index}">
+                  <fw-select-option value="">Select Value</fw-select-option>
+                </fw-select>
+              </div>
+            `;
+            container.appendChild(block);
+        }
+
+        // Don't re-throw, continue with other conditions
+        console.warn(`Continuing with other conditions despite error in condition ${index + 1}`);
+    }
+}
+
+
+// Combined function to add and populate watch block
+async function addAndPopulateWatchBlock(index, watch) {
+
+    try {
+        console.log(`Starting population of watch ${index + 1}:`, watch);
+
+        // Add the watch block
+        const container = document.getElementById("watchContainer");
+        const block = document.createElement("div");
+        block.className = "watch-block";
+        block.innerHTML = `
+            <div class="block-header">
+              <div class="block-title">Field Monitor ${index + 1}</div>
+              <button class="remove-btn" onclick="removeBlock(this)">✕</button>
+            </div>
+            <div class="field-row two-col">
+              <fw-select label="Module" id="watchMod${index}">
+                <fw-select-option value="">Select Module</fw-select-option>
+                ${modules.map(m => `<fw-select-option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</fw-select-option>`).join("")}
+              </fw-select>
+              <fw-select label="Fields to Monitor" id="watchFields${index}" multiple>
+              </fw-select>
+            </div>
+          `;
+
+        container.appendChild(block);
+
+        // Wait for DOM elements to be ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Get the elements
+        const modSelect = document.getElementById(`watchMod${index}`);
+        const fieldSelect = document.getElementById(`watchFields${index}`);
+
+        if (!modSelect || !fieldSelect) {
+            throw new Error(`Failed to find watch elements for index ${index}`);
+        }
+
+        // Validate watch data
+        if (!watch.module) {
+            throw new Error(`Invalid watch data for index ${index}: ${JSON.stringify(watch)}`);
+        }
+
+        // Set module value
+        console.log(`Setting module for watch ${index}: ${watch.module}`);
+        modSelect.value = watch.module;
+
+        // Check if we have field metadata for this module
+        let moduleFields = fieldsMetadata[watch.module];
+
+        if (!moduleFields || !moduleFields.fields) {
+            console.log(`Field metadata not found for ${watch.module}, fetching...`);
+            try {
+                const fetchedFields = await fetchFieldsFromAPI(watch.module, []);
+                if (fetchedFields && fetchedFields.fields) {
+                    moduleFields = fetchedFields;
+                    console.log(`✅ Fetched fields for ${watch.module}:`, moduleFields.fields.length);
+                } else {
+                    throw new Error(`Failed to fetch fields for module: ${watch.module}`);
+                }
+            } catch (fetchError) {
+                console.error(`Failed to fetch fields for ${watch.module}:`, fetchError);
+                throw new Error(`Cannot load fields for module: ${watch.module}`);
+            }
+        }
+
+        // Ensure fields array exists
+        if (!moduleFields.fields || !Array.isArray(moduleFields.fields)) {
+            throw new Error(`Invalid field data structure for module: ${watch.module}`);
+        }
+
+        // Build field options (include all fields for watch, not just choice fields)
+        console.log(`Building field options for watch ${index}`);
+        const fieldOptions = [];
+
+        moduleFields.fields.forEach((field) => {
+            if (field && field.label && field.name) {
+                fieldOptions.push({ text: field.label, value: field.name });
+            }
+        });
+
+        console.log(`Found ${fieldOptions.length} field options for watch ${index}:`, fieldOptions.map(f => f.text));
+
+        if (fieldOptions.length === 0) {
+            console.warn(`No valid field options found for module: ${watch.module}`);
+            fieldOptions.push({ text: "No fields available", value: "" });
+        }
+
+        try {
+            fieldSelect.options = fieldOptions;
+            console.log(`✅ Set ${fieldOptions.length} options for watch ${index} field select`);
+
+            // Verify options were set
+            setTimeout(() => {
+                const actualOptions = fieldSelect.options;
+                console.log(`Verification: Watch ${index} has ${actualOptions ? actualOptions.length : 0} options`);
+                if (!actualOptions || actualOptions.length === 0) {
+                    console.warn(`⚠️ Options not set properly for watch ${index}, retrying...`);
+                    // Retry setting options
+                    fieldSelect.options = fieldOptions;
+                }
+            }, 50);
+        } catch (optionError) {
+            console.error(`❌ Error setting options for watch ${index}:`, optionError);
+        }
+
+        // Wait a moment for the options to be set
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Set selected field values
+        if (watch.fields && watch.fields.length > 0) {
+            console.log(`Setting fields for watch ${index}:`, watch.fields);
+            try {
+                fieldSelect.setSelectedValues(watch.fields);
+                console.log(`✅ Successfully set selected values for watch ${index}`);
+            } catch (setValueError) {
+                console.error(`❌ Error setting selected values for watch ${index}:`, setValueError);
+                // Try alternative approach
+                setTimeout(() => {
+                    try {
+                        fieldSelect.value = watch.fields;
+                        console.log(`✅ Set values using alternative method for watch ${index}`);
+                    } catch (altError) {
+                        console.error(`❌ Alternative method also failed for watch ${index}:`, altError);
+                    }
+                }, 200);
+            }
+        } else {
+            console.log(`No fields to set for watch ${index}`);
+        }
+
+
+
+
+        // Add event listener for future changes (and clear validation errors on change)
+        modSelect.addEventListener("fwChange", (e) => {
+            resetWatcherValidation()
+
+            const idx = e.target.id.replace("watchMod", "");
+            // Clear validation error when user makes changes
+            const block = e.target.closest('.watch-block');
+            if (block) {
+                block.classList.remove("validation-error");
+                const errorMsg = document.getElementById(`watchError${idx}`);
+                if (errorMsg) {
+                    errorMsg.classList.remove("show");
+                }
+            }
+
+            if (!isPopulating) {
+                loadWatchFields(`watchMod${idx}`, `watchFields${idx}`);
+            }
+        });
+
+        // Add field selection listener to clear validation errors
+        fieldSelect.addEventListener("fwChange", (e) => {
+            resetWatcherValidation()
+            const idx = e.target.id.replace("watchFields", "");
+            const block = e.target.closest('.watch-block');
+            if (block) {
+                block.classList.remove("validation-error");
+                const errorMsg = document.getElementById(`watchError${idx}`);
+                if (errorMsg) {
+                    errorMsg.classList.remove("show");
+                }
+            }
+        });
+
+        console.log(`✅ Watch ${index + 1} populated successfully`);
+
+        $(elements.validateWatchersBtn).html("Saved").attr("disabled", true);
+        ls.isWatcherConfigured = true;
+
+    } catch (error) {
+        console.error(`❌ Error populating watch ${index + 1}:`, error);
+        console.error(`Watch data:`, watch);
+        console.error(`Available modules:`, modules);
+        console.error(`Field metadata:`, fieldsMetadata);
+
+        // Still add the block even if population fails
+        const container = document.getElementById("watchContainer");
+        if (container.children.length <= index) {
+            const block = document.createElement("div");
+            block.className = "watch-block";
+            block.innerHTML = `
+              <div class="block-header">
+                <div class="block-title" style="color: #ef4444;">Field Monitor ${index + 1} (Error)</div>
+                <button class="remove-btn" onclick="removeBlock(this)">✕</button>
+              </div>
+              <div class="field-row two-col">
+                <fw-select label="Module" id="watchMod${index}">
+                  <fw-select-option value="">Select Module</fw-select-option>
+                  ${modules.map(m => `<fw-select-option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)}</fw-select-option>`).join("")}
+                </fw-select>
+                <fw-select label="Fields to Monitor" id="watchFields${index}" multiple>
+                </fw-select>
+              </div>
+            `;
+            container.appendChild(block);
+        }
+
+        // Don't re-throw, continue with other watches
+        console.warn(`Continuing with other watches despite error in watch ${index + 1}`);
+    }
+}
+
+
+
+// Helper function to wait for modules to be loaded
+function waitForModulesLoaded(maxWait = 5000) {
+    return new Promise((resolve, reject) => {
+        const startTime = Date.now();
+
+        function checkModules() {
+            if (modules.length > 0 && isAuthenticated) {
+                resolve();
+            } else if (Date.now() - startTime > maxWait) {
+                reject(new Error("Timeout waiting for modules to load"));
+            } else {
+                setTimeout(checkModules, 100);
+            }
+        }
+
+        checkModules();
+    });
+}
+
+
+async function preloadFieldMetadata(savedConfigs) {
+    const modulesToPreload = new Set();
+
+    // Collect all modules from conditions
+    if (savedConfigs.conditions && Array.isArray(savedConfigs.conditions)) {
+        savedConfigs.conditions.forEach(condition => {
+            if (condition && condition.module) {
+                modulesToPreload.add(condition.module);
+            }
+        });
+    }
+
+    // Collect all modules from watches
+    if (savedConfigs.watches && Array.isArray(savedConfigs.watches)) {
+        savedConfigs.watches.forEach(watch => {
+            if (watch && watch.module) {
+                modulesToPreload.add(watch.module);
+            }
+        });
+    }
+
+    console.log(`Pre-loading field metadata for modules:`, Array.from(modulesToPreload));
+
+    // Pre-load field metadata for all modules
+    const loadPromises = Array.from(modulesToPreload).map(async (module) => {
+        console.log(`Pre-loading fields for module: ${module}`);
+        try {
+            // Check if module exists in our modules list
+            if (!modules.includes(module)) {
+                console.warn(`Module ${module} not found in available modules:`, modules);
+                return;
+            }
+
+            const fields = await fetchFieldsFromAPI(module, []);
+            if (fields && fields.fields) {
+                console.log(`✅ Pre-loaded ${fields.fields.length} fields for module: ${module}`);
+            } else {
+                console.warn(`⚠️ No fields returned for module: ${module}`);
+            }
+        } catch (error) {
+            console.error(`❌ Failed to pre-load fields for module ${module}:`, error);
+            // Don't throw, continue with other modules
+        }
+    });
+
+    // Wait for all field metadata to be loaded
+    await Promise.allSettled(loadPromises);
+    console.log(`Field metadata pre-loading completed. Available modules:`, Object.keys(fieldsMetadata));
+}
+
+
+// Helper function to find field metadata
+async function findFieldMetadata(module, fieldName) {
+    try {
+        // First try flat structure
+        let field = fieldsMetadata[module]?.fields?.find(f => f.name === fieldName);
+
+        // If not found, search in forms (for custom modules)
+        if (!field && Array.isArray(fieldsMetadata[module]?.forms)) {
+            const forms = fieldsMetadata[module].forms;
+
+            function deepFindField(fields, targetName) {
+                for (const f of fields) {
+                    if (f.name === targetName) return f;
+                    if (Array.isArray(f.fields)) {
+                        const found = deepFindField(f.fields, targetName);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            }
+
+            for (const form of forms) {
+                if (form.fields) {
+                    field = deepFindField(form.fields, fieldName);
+                    if (field) break;
+                }
+            }
+        }
+
+        return field;
+    } catch (error) {
+        console.error(`Error finding field metadata for ${module}.${fieldName}:`, error);
+        return null;
+    }
 }
