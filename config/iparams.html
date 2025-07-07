@@ -518,8 +518,16 @@ const {
 
 
 $(validateFsBtn).on('click',fsValidation);
-$(validateConditionsBtn).on("click", saveConditionBlock);
-$(validateWatchersBtn).on("click", saveWatcherBlock);
+$(validateConditionsBtn).on("click",()=>{
+  clearValidationErrors('condition')
+  saveConditionBlock()
+}
+);
+$(validateWatchersBtn).on("click",()=>{
+  clearValidationErrors()
+  saveWatcherBlock()
+} 
+);
 
 // // Add event listeners for add buttons
 $(addConditionBtn).on("click", ()=>{
