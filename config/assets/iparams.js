@@ -562,6 +562,57 @@ function clearValidationErrors(flag) {
 
 
 
+// function addFieldWatchBlock() {
+//     if (!isAuthenticated) {
+//         const tabs = document.getElementById("tabs");
+//         if (tabs) {
+//             tabs.setAttribute("active-tab", "0");
+//         }
+//         return;
+//     }
+
+//     const container = document.getElementById("watchContainer");
+//     const index = container.children.length;
+//     const block = document.createElement("div");
+//     block.className = "watch-block";
+//     block.innerHTML = `
+//           <div class="block-header">
+//             <div class="block-title">Field Monitor ${index + 1}</div>
+//             <button class="remove-btn" onclick="removeBlock(this)">✕</button>
+//           </div>
+//           <div class="field-row two-col">
+//             <fw-select label="Module" id="watchMod${index}">
+//               <fw-select-option value="">Select Module</fw-select-option>
+//               ${modules
+//             .map(
+//                 (m) =>
+//                     `<fw-select-option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)
+//                     }</fw-select-option>`
+//             )
+//             .join("")}
+//             </fw-select>
+//             <fw-select label="Fields to Monitor" id="watchFields${index}" multiple>
+//             </fw-select>
+//           </div>
+//           <div class="validation-error-message" id="watchError${index}"></div>
+//         `;
+
+//     container.appendChild(block);
+//     const modSelect = document.getElementById(`watchMod${index}`);
+//     modSelect.addEventListener("fwChange", (e) => {
+//         resetWatcherValidation()
+//         const idx = e.target.id.replace("watchMod", "");
+//         loadWatchFields(`watchMod${idx}`, `watchFields${idx}`);
+//     });
+
+//     const modValue = document.getElementById(`watchFields${index}`);
+//     modValue.addEventListener('fwChange', () => {
+//         resetWatcherValidation()
+
+//     })
+// }
+
+
 function addFieldWatchBlock() {
     if (!isAuthenticated) {
         const tabs = document.getElementById("tabs");
@@ -572,18 +623,27 @@ function addFieldWatchBlock() {
     }
 
     const container = document.getElementById("watchContainer");
+
+    // 🔥 Step 1: Collect already-selected modules
+    const selectedModules = Array.from(
+        container.querySelectorAll('fw-select[id^="watchMod"]')
+    ).map((sel) => sel.value).filter(Boolean);
+
+    // 🔥 Step 2: Filter out already-selected modules
+    const availableModules = modules.filter((m) => !selectedModules.includes(m));
+
     const index = container.children.length;
     const block = document.createElement("div");
     block.className = "watch-block";
     block.innerHTML = `
-          <div class="block-header">
+        <div class="block-header">
             <div class="block-title">Field Monitor ${index + 1}</div>
             <button class="remove-btn" onclick="removeBlock(this)">✕</button>
-          </div>
-          <div class="field-row two-col">
+        </div>
+        <div class="field-row two-col">
             <fw-select label="Module" id="watchMod${index}">
-              <fw-select-option value="">Select Module</fw-select-option>
-              ${modules
+                <fw-select-option value="">Select Module</fw-select-option>
+                ${availableModules
             .map(
                 (m) =>
                     `<fw-select-option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)
@@ -593,30 +653,34 @@ function addFieldWatchBlock() {
             </fw-select>
             <fw-select label="Fields to Monitor" id="watchFields${index}" multiple>
             </fw-select>
-          </div>
-          <div class="validation-error-message" id="watchError${index}"></div>
-        `;
+        </div>
+        <div class="validation-error-message" id="watchError${index}"></div>
+    `;
 
     container.appendChild(block);
+
     const modSelect = document.getElementById(`watchMod${index}`);
     modSelect.addEventListener("fwChange", (e) => {
-        resetWatcherValidation()
+        resetWatcherValidation();
         const idx = e.target.id.replace("watchMod", "");
         loadWatchFields(`watchMod${idx}`, `watchFields${idx}`);
     });
 
     const modValue = document.getElementById(`watchFields${index}`);
     modValue.addEventListener('fwChange', () => {
-        resetWatcherValidation()
-
-    })
+        resetWatcherValidation();
+    });
 }
+
 
 
 
 async function loadWatchFields(modId, fieldId) {
     const modElem = document.getElementById(modId);
     const fieldElem = document.getElementById(fieldId);
+    console.log('this is it', modElem)
+    console.log('and', fieldElem)
+
     const selectedModule = modElem?.value;
 
     if (!selectedModule) {
@@ -624,7 +688,8 @@ async function loadWatchFields(modId, fieldId) {
         return;
     }
 
-    fieldElem.innerHTML = '<fw-select-option value="">Loading fields...</fw-select-option>';
+    fieldElem.innerHTML =
+        '<fw-select-option value="">Loading fields...</fw-select-option>';
 
     try {
         let fields = fieldsMetadata[selectedModule];
@@ -634,45 +699,26 @@ async function loadWatchFields(modId, fieldId) {
         }
 
         if (!fields) {
-            fieldElem.innerHTML = '<fw-select-option value="">Error loading fields</fw-select-option>';
+            fieldElem.innerHTML =
+                '<fw-select-option value="">Error loading fields</fw-select-option>';
             return;
         }
 
-        // 🟡 Get already-selected field values from other fw-selects
-        const allFieldSelects = document.querySelectorAll('fw-select[id^="watchFields"]');
-        const selectedValues = new Set();
-
-        allFieldSelects.forEach((select) => {
-            if (select.id !== fieldId) {
-                const value = select.value;
-                if (value) {
-                    if (Array.isArray(value)) {
-                        value.forEach(v => selectedValues.add(v));
-                    } else {
-                        selectedValues.add(value);
-                    }
-                }
-            }
-        });
-
         fieldElem.innerHTML = "";
-        const fieldArray = [];
-
+        let fieldArray = [];
         fields.fields.forEach((field) => {
-            if (field.label && field.name && !selectedValues.has(field.name)) {
+            if (field.label && field.name) {
                 fieldArray.push({
                     text: field.label,
                     value: field.name,
                 });
+                fieldElem.options = fieldArray;
             }
         });
-
-        fieldElem.options = fieldArray;
     } catch (error) {
         console.error("Error loading watch fields:", error);
     }
 }
-
 
 
 
