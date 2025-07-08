@@ -863,7 +863,6 @@ function refreshAllConditionFields() {
 // }
 
 function removeBlock(button) {
-    resetWatcherValidation();
 
     const block = button.closest(".watch-block");
     if (!block) return;
@@ -903,6 +902,7 @@ function removeBlock(button) {
             }
         }
     });
+    resetWatcherValidation();
 
     console.log("✅ Watch blocks reindexed after removal");
 }
