@@ -301,6 +301,9 @@ async function fetchFieldsFromAPI(module, excludeFields = []) {
             }
         } else {
             // === ✅ Handle STANDARD MODULE
+
+            console.log('cheeeeeeeeeeeeeeeeeeeeeeeeekkkkkkk', moduleMap)
+
             response = await client.request.invokeTemplate(
                 "GetFreshsalesFields",
                 {
@@ -312,21 +315,43 @@ async function fetchFieldsFromAPI(module, excludeFields = []) {
                 }
             );
 
+            // if (response.status === 200 && response.response) {
+            //     const parsed = JSON.parse(response.response);
+            //     fieldsMetadata[module] = parsed;
+
+            //     const allFields = parsed.fields || [];
+
+            //     const filteredData = {
+            //         fields:
+            //             excludeFields.length > 0
+            //                 ? allFields.filter((f) => !excludeFields.includes(f.name))
+            //                 : allFields,
+            //     };
+
+            //     return filteredData;
+            // }
+
             if (response.status === 200 && response.response) {
                 const parsed = JSON.parse(response.response);
                 fieldsMetadata[module] = parsed;
 
                 const allFields = parsed.fields || [];
 
-                const filteredData = {
-                    fields:
-                        excludeFields.length > 0
-                            ? allFields.filter((f) => !excludeFields.includes(f.name))
-                            : allFields,
-                };
+                const excludeSet = new Set(excludeFields);
 
-                return filteredData;
-            } else {
+                const filteredFields = [];
+
+                for (const field of allFields) {
+                    if (field.type === 'group_field' || field.type === 'auto_complete') continue;
+                    if (excludeSet.has(field.name)) continue;
+                    filteredFields.push(field);
+                }
+
+                return { fields: filteredFields };
+            }
+
+
+            else {
                 console.error("Failed to fetch standard fields:", response);
                 return null;
             }
@@ -537,6 +562,57 @@ function clearValidationErrors(flag) {
 
 
 
+// function addFieldWatchBlock() {
+//     if (!isAuthenticated) {
+//         const tabs = document.getElementById("tabs");
+//         if (tabs) {
+//             tabs.setAttribute("active-tab", "0");
+//         }
+//         return;
+//     }
+
+//     const container = document.getElementById("watchContainer");
+//     const index = container.children.length;
+//     const block = document.createElement("div");
+//     block.className = "watch-block";
+//     block.innerHTML = `
+//           <div class="block-header">
+//             <div class="block-title">Field Monitor ${index + 1}</div>
+//             <button class="remove-btn" onclick="removeBlock(this)">✕</button>
+//           </div>
+//           <div class="field-row two-col">
+//             <fw-select label="Module" id="watchMod${index}">
+//               <fw-select-option value="">Select Module</fw-select-option>
+//               ${modules
+//             .map(
+//                 (m) =>
+//                     `<fw-select-option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)
+//                     }</fw-select-option>`
+//             )
+//             .join("")}
+//             </fw-select>
+//             <fw-select label="Fields to Monitor" id="watchFields${index}" multiple>
+//             </fw-select>
+//           </div>
+//           <div class="validation-error-message" id="watchError${index}"></div>
+//         `;
+
+//     container.appendChild(block);
+//     const modSelect = document.getElementById(`watchMod${index}`);
+//     modSelect.addEventListener("fwChange", (e) => {
+//         resetWatcherValidation()
+//         const idx = e.target.id.replace("watchMod", "");
+//         loadWatchFields(`watchMod${idx}`, `watchFields${idx}`);
+//     });
+
+//     const modValue = document.getElementById(`watchFields${index}`);
+//     modValue.addEventListener('fwChange', () => {
+//         resetWatcherValidation()
+
+//     })
+// }
+
+
 function addFieldWatchBlock() {
     if (!isAuthenticated) {
         const tabs = document.getElementById("tabs");
@@ -547,18 +623,27 @@ function addFieldWatchBlock() {
     }
 
     const container = document.getElementById("watchContainer");
+
+    // 🔥 Step 1: Collect already-selected modules
+    const selectedModules = Array.from(
+        container.querySelectorAll('fw-select[id^="watchMod"]')
+    ).map((sel) => sel.value).filter(Boolean);
+
+    // 🔥 Step 2: Filter out already-selected modules
+    const availableModules = modules.filter((m) => !selectedModules.includes(m));
+
     const index = container.children.length;
     const block = document.createElement("div");
     block.className = "watch-block";
     block.innerHTML = `
-          <div class="block-header">
+        <div class="block-header">
             <div class="block-title">Field Monitor ${index + 1}</div>
             <button class="remove-btn" onclick="removeBlock(this)">✕</button>
-          </div>
-          <div class="field-row two-col">
+        </div>
+        <div class="field-row two-col">
             <fw-select label="Module" id="watchMod${index}">
-              <fw-select-option value="">Select Module</fw-select-option>
-              ${modules
+                <fw-select-option value="">Select Module</fw-select-option>
+                ${availableModules
             .map(
                 (m) =>
                     `<fw-select-option value="${m}">${m.charAt(0).toUpperCase() + m.slice(1)
@@ -568,30 +653,34 @@ function addFieldWatchBlock() {
             </fw-select>
             <fw-select label="Fields to Monitor" id="watchFields${index}" multiple>
             </fw-select>
-          </div>
-          <div class="validation-error-message" id="watchError${index}"></div>
-        `;
+        </div>
+        <div class="validation-error-message" id="watchError${index}"></div>
+    `;
 
     container.appendChild(block);
+
     const modSelect = document.getElementById(`watchMod${index}`);
     modSelect.addEventListener("fwChange", (e) => {
-        resetWatcherValidation()
+        resetWatcherValidation();
         const idx = e.target.id.replace("watchMod", "");
         loadWatchFields(`watchMod${idx}`, `watchFields${idx}`);
     });
 
     const modValue = document.getElementById(`watchFields${index}`);
     modValue.addEventListener('fwChange', () => {
-        resetWatcherValidation()
-
-    })
+        resetWatcherValidation();
+    });
 }
+
 
 
 
 async function loadWatchFields(modId, fieldId) {
     const modElem = document.getElementById(modId);
     const fieldElem = document.getElementById(fieldId);
+    console.log('this is it', modElem)
+    console.log('and', fieldElem)
+
     const selectedModule = modElem?.value;
 
     if (!selectedModule) {
@@ -630,6 +719,10 @@ async function loadWatchFields(modId, fieldId) {
         console.error("Error loading watch fields:", error);
     }
 }
+
+
+
+
 
 
 function saveWatcherBlock() {
