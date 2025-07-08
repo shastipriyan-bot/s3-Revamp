@@ -301,6 +301,9 @@ async function fetchFieldsFromAPI(module, excludeFields = []) {
             }
         } else {
             // === ✅ Handle STANDARD MODULE
+
+            console.log('cheeeeeeeeeeeeeeeeeeeeeeeeekkkkkkk', moduleMap)
+
             response = await client.request.invokeTemplate(
                 "GetFreshsalesFields",
                 {
@@ -312,21 +315,43 @@ async function fetchFieldsFromAPI(module, excludeFields = []) {
                 }
             );
 
+            // if (response.status === 200 && response.response) {
+            //     const parsed = JSON.parse(response.response);
+            //     fieldsMetadata[module] = parsed;
+
+            //     const allFields = parsed.fields || [];
+
+            //     const filteredData = {
+            //         fields:
+            //             excludeFields.length > 0
+            //                 ? allFields.filter((f) => !excludeFields.includes(f.name))
+            //                 : allFields,
+            //     };
+
+            //     return filteredData;
+            // }
+
             if (response.status === 200 && response.response) {
                 const parsed = JSON.parse(response.response);
                 fieldsMetadata[module] = parsed;
 
                 const allFields = parsed.fields || [];
 
-                const filteredData = {
-                    fields:
-                        excludeFields.length > 0
-                            ? allFields.filter((f) => !excludeFields.includes(f.name))
-                            : allFields,
-                };
+                const excludeSet = new Set(excludeFields);
 
-                return filteredData;
-            } else {
+                const filteredFields = [];
+
+                for (const field of allFields) {
+                    if (field.type === 'group_field' || field.type === 'auto_complete') continue;
+                    if (excludeSet.has(field.name)) continue;
+                    filteredFields.push(field);
+                }
+
+                return { fields: filteredFields };
+            }
+
+
+            else {
                 console.error("Failed to fetch standard fields:", response);
                 return null;
             }
@@ -599,8 +624,7 @@ async function loadWatchFields(modId, fieldId) {
         return;
     }
 
-    fieldElem.innerHTML =
-        '<fw-select-option value="">Loading fields...</fw-select-option>';
+    fieldElem.innerHTML = '<fw-select-option value="">Loading fields...</fw-select-option>';
 
     try {
         let fields = fieldsMetadata[selectedModule];
@@ -610,26 +634,49 @@ async function loadWatchFields(modId, fieldId) {
         }
 
         if (!fields) {
-            fieldElem.innerHTML =
-                '<fw-select-option value="">Error loading fields</fw-select-option>';
+            fieldElem.innerHTML = '<fw-select-option value="">Error loading fields</fw-select-option>';
             return;
         }
 
+        // 🟡 Get already-selected field values from other fw-selects
+        const allFieldSelects = document.querySelectorAll('fw-select[id^="watchFields"]');
+        const selectedValues = new Set();
+
+        allFieldSelects.forEach((select) => {
+            if (select.id !== fieldId) {
+                const value = select.value;
+                if (value) {
+                    if (Array.isArray(value)) {
+                        value.forEach(v => selectedValues.add(v));
+                    } else {
+                        selectedValues.add(value);
+                    }
+                }
+            }
+        });
+
         fieldElem.innerHTML = "";
-        let fieldArray = [];
+        const fieldArray = [];
+
         fields.fields.forEach((field) => {
-            if (field.label && field.name) {
+            if (field.label && field.name && !selectedValues.has(field.name)) {
                 fieldArray.push({
                     text: field.label,
                     value: field.name,
                 });
-                fieldElem.options = fieldArray;
             }
         });
+
+        fieldElem.options = fieldArray;
     } catch (error) {
         console.error("Error loading watch fields:", error);
     }
 }
+
+
+
+
+
 
 
 function saveWatcherBlock() {
