@@ -1,21 +1,95 @@
 const axios = require("axios");
 
+// function checkConditions(conditions, data, modules) {
+//   console.log("data checkbox", data?.custom_field?.cf_cohort_record_available);
+//   console.log("data radio", data?.custom_field?.cf_undergraduate);
+//   console.log("module", modules);
+//   console.log("condition", conditions);
+
+
+
+//   for (const condition of conditions) {
+//     const { module, field, value } = condition;
+
+//     if (module === modules) {
+
+
+//       const actualValue = data?.custom_field?.[field];
+//       console.log("value", value);
+//       console.log("actualValue", actualValue);
+
+//       if (actualValue !== value) {
+//         return false;
+//       }
+//     }
+//   }
+
+//   return true;
+// }
+
+
+// function checkConditions(conditions, data, modules) {
+//   console.log("data available", data);
+//   console.log("condition", conditions);
+//   // console.log("data available", data?.[field]);
+//   // console.log("data available", data?.custom_field?.[field]);
+//   // console.log("data checkbox", data?.custom_field?.cf_cohort_record_available);
+//   // console.log("data radio", data?.custom_field?.cf_undergraduate);
+//   console.log("module", modules);
+
+//   for (const condition of conditions) {
+//     const { module, field, value } = condition;
+
+//     if (module === modules) {
+//       let actualValue = data?.[field];
+
+//       if (actualValue === undefined) {
+//         actualValue = data?.custom_field?.[field];
+//       }
+
+//       console.log("value", value);
+//       console.log("actualValue", actualValue);
+
+//       if (actualValue !== value) {
+//         return false;
+//       }
+//     }
+//   }
+
+//   return true;
+// }
+
+
+
+
 function checkConditions(conditions, data, modules) {
-  console.log("data checkbox", data?.custom_field?.cf_cohort_record_available);
-  console.log("data radio", data?.custom_fields?.cf_undergraduate);
-  console.log("module", modules);
+  // console.log("data available", data);
   console.log("condition", conditions);
+  console.log("module", modules);
 
   for (const condition of conditions) {
     const { module, field, value } = condition;
 
     if (module === modules) {
-      const actualValue = data?.custom_field?.[field];
+      let actualValue = data?.[field];
+
+      if (actualValue === undefined) {
+        actualValue = data?.custom_field?.[field];
+      }
+
       console.log("value", value);
       console.log("actualValue", actualValue);
 
-      if (actualValue !== value) {
-        return false;
+      // Special logic: if value is "not_empty"
+      if (value === "not_empty") {
+        if (actualValue === undefined || actualValue === null || actualValue === "") {
+          return false; // it's empty → fail
+        }
+      } else {
+        // Normal equality check
+        if (actualValue !== value) {
+          return false;
+        }
       }
     }
   }
@@ -23,21 +97,118 @@ function checkConditions(conditions, data, modules) {
   return true;
 }
 
+
+
+
+// function hasRelevantFieldChanged(updateData, conditions, watches, currentModule) {
+//   if (!updateData || !updateData.custom_fields) return false;
+
+//   const updatedFields = Object.keys(updateData.custom_fields || {});
+
+//   const conditionFields = conditions
+//     .filter(c => c.module === currentModule)
+//     .map(c => c.field);
+
+//   const watchFields = watches
+//     .filter(w => w.module === currentModule)
+//     .flatMap(w => w.fields);
+
+//   const allFieldsToWatch = [...new Set([...conditionFields, ...watchFields])];
+
+//   return updatedFields.some(field => allFieldsToWatch.includes(field));
+// }
+
+
+
+
+
+// function checkWatchedFields(watches, data, currentModule) {
+//   for (const watch of watches) {
+//     const { module, fields } = watch;
+
+//     if (module === currentModule && Array.isArray(fields)) {
+//       for (const field of fields) {
+//         const value = data?.custom_field?.[field];
+//         if (
+//           Object.prototype.hasOwnProperty.call(data?.custom_field || {}, field) &&
+//           value !== null &&
+//           value !== ""
+//         ) {
+//           return true;
+//         }
+//       }
+//     }
+//   }
+
+//   return false;
+// }
+
+
+
+function hasRelevantFieldChanged(updateData, conditions, watches, currentModule) {
+  if (!updateData || typeof updateData !== 'object') return false;
+
+  // All updated fields (top-level and custom_fields)
+  const changedFields = new Set([
+    ...Object.keys(updateData || {}),
+    ...Object.keys(updateData.custom_fields || {})
+  ]);
+
+  // Merge condition + watch fields (with null value for watches)
+  const conditionFields = conditions
+    .filter(c => c.module === currentModule)
+    .map(c => ({ field: c.field, value: c.value }));
+
+  const watchFields = watches
+    .filter(w => w.module === currentModule)
+    .flatMap(w => w.fields.map(field => ({ field, value: null })));
+
+  const allWatched = [...conditionFields, ...watchFields];
+
+  for (const { field, value } of allWatched) {
+    if (changedFields.has(field)) {
+      const fullChange = updateData[field] ?? updateData.custom_fields?.[field];
+      const newValue = Array.isArray(fullChange) ? fullChange[1] : fullChange;
+
+      if (value === "not_empty") {
+        if (newValue !== undefined && newValue !== null && newValue !== "") {
+          return true; // field has a non-empty new value
+        }
+      } else {
+        // For conditions with specific value OR watchFields (value = null)
+        if (value === null || newValue === value) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false; // No matching changed field found
+}
+
+
+
+
 function checkWatchedFields(watches, data, currentModule) {
   for (const watch of watches) {
     const { module, fields } = watch;
-    console.log("watches condition", watches);
-    console.log("module", module);
-    console.log("currentModule", currentModule);
-    console.log("module === currentModule", module === currentModule);
-    console.log(Array.isArray(fields));
+
     if (module === currentModule && Array.isArray(fields)) {
       for (const field of fields) {
-        console.log(
-          "data?.custom_field?.hasOwnProperty(field)",
+        let value;
+        let fieldExists = false;
 
-        );
-        if (data?.custom_field?.hasOwnProperty(field)) {
+        if (Object.prototype.hasOwnProperty.call(data || {}, field)) {
+          value = data[field];
+          fieldExists = true;
+        } else if (Object.prototype.hasOwnProperty.call(data?.custom_field || {}, field)) {
+          value = data.custom_field[field];
+          fieldExists = true;
+        }
+
+        const isValid = value !== undefined && value !== null && value !== '';
+
+        if (fieldExists && isValid) {
           return true;
         }
       }
@@ -47,7 +218,14 @@ function checkWatchedFields(watches, data, currentModule) {
   return false;
 }
 
+
+
+
+
 function checkConditionFieldsChanged(conditions, updateData, currentModule) {
+  console.log(conditions, 'and', updateData)
+
+
   for (const condition of conditions) {
     const { module, field } = condition;
 
@@ -108,41 +286,96 @@ exports = {
     this.getContactRecord(args);
   },
 
-  onContactUpdateHandler: function (args) {
+  // onContactUpdateHandler: async function (args) {
+  //   console.log('args data--->>', args.data)
+  //   const contact = args.data;
+  //   const updateData = contact?.changes?.model_changes;
+  //   console.log("Updated Fields:", updateData); // may be empty or undefined
+  //   const conditions = args.iparams.conditions;
+  //   const watches = args.iparams.watches
+  //   // const hasChanged = checkConditionFieldsChanged(
+  //   //   conditions,
+  //   //   updateData,
+  //   //   "Contact"
+  //   // );
+  //   // console.log("hasChanged", hasChanged)
+  //   // if (hasChanged) {
+  //   await this.getContactRecord(args);
+  //   // }
+  // },
+
+
+
+  onContactUpdateHandler: async function (args) {
+    console.log('args data--->>', args.data);
     const contact = args.data;
     const updateData = contact?.changes?.model_changes;
-    console.log("Updated Fields:", updateData); // may be empty or undefined
+    console.log("Updated Fields:", updateData);
+
     const conditions = args.iparams.conditions;
-    const hasChanged = checkConditionFieldsChanged(
-      conditions,
+    const watches = args.iparams.watches;
+
+    const shouldTrigger = hasRelevantFieldChanged(
       updateData,
+      conditions,
+      watches,
       "Contact"
     );
-    console.log("hasChanged", hasChanged)
-    if (hasChanged) {
-      this.getContactRecord(args);
+
+    if (shouldTrigger) {
+      await this.getContactRecord(args);
     }
   },
+
+
+
+
+
+
 
   onDealCreateHandler: function (args) {
     this.getDealRecord(args);
   },
 
+  // onDealUpdateHandler: function (args) {
+  //   const deal = args.data;
+  //   const updateData = deal?.changes?.model_changes;
+  //   console.log("Updated Fields:", updateData); // may be empty or undefined
+  //   const conditions = args.iparams.conditions;
+  //   const hasChanged = checkConditionFieldsChanged(
+  //     conditions,
+  //     updateData,
+  //     "Deal"
+  //   );
+
+  //   if (hasChanged) {
+  //     this.getDealRecord(args);
+  //   }
+  // },
+
   onDealUpdateHandler: function (args) {
     const deal = args.data;
     const updateData = deal?.changes?.model_changes;
-    console.log("Updated Fields:", updateData); // may be empty or undefined
+    console.log("Updated Fields:", updateData);
+
     const conditions = args.iparams.conditions;
-    const hasChanged = checkConditionFieldsChanged(
-      conditions,
+    const watches = args.iparams.watches;
+
+    const shouldTrigger = hasRelevantFieldChanged(
       updateData,
+      conditions,
+      watches,
       "Deal"
     );
 
-    if (hasChanged) {
+    if (shouldTrigger) {
       this.getDealRecord(args);
     }
   },
+
+
+
+
   onCustomModuleCreateHandler: function (args) {
     if (args.data.custom_module_record.module_name == "cm_cohort_stage_1") {
       this.getCohortOne(args);
@@ -223,6 +456,10 @@ exports = {
 
   // get record by freshsales API section
   getContactRecord: async function (args) {
+    // console.log('checking args', args)
+    // console.log('checking args', args.data)
+    // console.log('checking args', args.data.contact)
+    // console.log('checking args', args.data.contact.id)
     try {
       const url = `https://avansefinancialservices-sandbox.myfreshworks.com/crm/sales/api/contacts/${args.data.contact.id}`;
       // const url = `https://avansefinancialservices-sandbox.myfreshworks.com/crm/sales/api/contacts/70117358675`;
@@ -250,7 +487,7 @@ exports = {
         );
       }
     } catch (error) {
-      console.log("error in getting the contact id : ", args.data.contact.id);
+      console.log("error in getting the contact id : ", args.data.contact.id, error);
     }
   },
   getDealRecord: async function (args) {
@@ -281,7 +518,7 @@ exports = {
         );
       }
     } catch (error) {
-      console.log("error in getting the deal id : ", args.data.deal.id);
+      console.log("error in getting the deal id : ", args.data.deal.id, error);
     }
   },
   getCohortOne: async function (args) {
@@ -537,7 +774,8 @@ exports = {
 
       let result = await axios({
         method: "post",
-        url: "https://hooks.konnectify.co/webhook/v1/HXszj5jbus",
+        // url: "https://hooks.konnectify.co/webhook/v1/HXszj5jbus",
+        url: 'https://hooks.konnectify.co/webhook/v1/FYEgeuWTkn',
         data: body,
       });
       console.log("webhook result :", result.status);
@@ -552,7 +790,8 @@ exports = {
 
       let result = await axios({
         method: "post",
-        url: "https://hooks.konnectify.co/webhook/v1/OLnhlMyZbQ",
+        // url: "https://hooks.konnectify.co/webhook/v1/OLnhlMyZbQ",
+        url: 'https://hooks.konnectify.co/webhook/v1/FYEgeuWTkn',
         data: body,
       });
       console.log("result :", result);
@@ -566,7 +805,8 @@ exports = {
 
       let result = await axios({
         method: "post",
-        url: "https://hooks.konnectify.co/webhook/v1/ke8jzqmLoq",
+        // url: "https://hooks.konnectify.co/webhook/v1/ke8jzqmLoq",
+        url: 'https://hooks.konnectify.co/webhook/v1/FYEgeuWTkn',
         data: body,
       });
       console.log("result :", result);
@@ -580,7 +820,8 @@ exports = {
 
       let result = await axios({
         method: "post",
-        url: "https://hooks.konnectify.co/webhook/v1/qXNogIcgfq",
+        // url: "https://hooks.konnectify.co/webhook/v1/qXNogIcgfq",
+        url: 'https://hooks.konnectify.co/webhook/v1/FYEgeuWTkn',
         data: body,
       });
       console.log("result :", result);
@@ -594,7 +835,8 @@ exports = {
 
       let result = await axios({
         method: "post",
-        url: "https://hooks.konnectify.co/webhook/v1/ppRrjcr3CH",
+        // url: "https://hooks.konnectify.co/webhook/v1/ppRrjcr3CH",
+        url: 'https://hooks.konnectify.co/webhook/v1/FYEgeuWTkn',
         data: body,
       });
       console.log("result :", result);
@@ -608,7 +850,8 @@ exports = {
 
       let result = await axios({
         method: "post",
-        url: "https://hooks.konnectify.co/webhook/v1/OyFkzUate7",
+        // url: "https://hooks.konnectify.co/webhook/v1/OyFkzUate7",
+        url: 'https://hooks.konnectify.co/webhook/v1/FYEgeuWTkn',
         data: body,
       });
       console.log("result :", result);
@@ -622,7 +865,8 @@ exports = {
 
       let result = await axios({
         method: "post",
-        url: "https://hooks.konnectify.co/webhook/v1/uQy6gxchv8",
+        // url: "https://hooks.konnectify.co/webhook/v1/uQy6gxchv8",
+        url: 'https://hooks.konnectify.co/webhook/v1/FYEgeuWTkn',
         data: body,
       });
       console.log("result :", result);
@@ -636,7 +880,8 @@ exports = {
 
       let result = await axios({
         method: "post",
-        url: "https://hooks.konnectify.co/webhook/v1/K5q6brACrr",
+        // url: "https://hooks.konnectify.co/webhook/v1/K5q6brACrr",
+        url: 'https://hooks.konnectify.co/webhook/v1/FYEgeuWTkn',
         data: body,
       });
       console.log("result :", result);
